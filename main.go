@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
-	"github.com/ryandavidmercado/jack-compiler/lexer"
-	"github.com/ryandavidmercado/jack-compiler/parser"
 	"log"
 	"os"
 	"path"
 	"strings"
+
+	"github.com/ryandavidmercado/jack-compiler/compiler"
+	"github.com/ryandavidmercado/jack-compiler/lexer"
+	"github.com/ryandavidmercado/jack-compiler/parser"
 )
 
 func main() {
@@ -54,11 +56,16 @@ func main() {
 		output, err := os.Create(outputPath)
 
 		writer := bufio.NewWriter(output)
-
 		lexer := lexer.New(bufio.NewReader(input))
-		parser := parser.New(lexer, writer)
 
-		err = parser.Parse()
+		switch flags.mode {
+		case RunModeAnalyze:
+			parser := parser.New(lexer, writer)
+			err = parser.Parse()
+		case RunModeCompile:
+			compiler := compiler.New(lexer, writer)
+			err = compiler.Compile()
+		}
 
 		inputName := path.Base(file)
 		outputName := path.Base(outputPath)
