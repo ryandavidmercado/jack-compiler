@@ -43,6 +43,9 @@ func main() {
 	}
 
 	for _, file := range files {
+		inputName := path.Base(file)
+		var outputName string
+
 		log.SetFlags(log.Flags())
 
 		input, err := os.Open(file)
@@ -52,30 +55,45 @@ func main() {
 
 		log.SetFlags(0)
 
-		outputPath := strings.TrimSuffix(file, path.Ext(file)) + ".xml"
-		output, err := os.Create(outputPath)
-
-		writer := bufio.NewWriter(output)
 		lexer := lexer.New(bufio.NewReader(input))
 
 		switch flags.mode {
 		case RunModeAnalyze:
+			outputPath := strings.TrimSuffix(file, path.Ext(file)) + ".xml"
+			output, fileerr := os.Create(outputPath)
+			if fileerr != nil {
+				log.Fatal(fileerr)
+			}
+			outputName = path.Base(outputPath)
+
+			writer := bufio.NewWriter(output)
 			parser := parser.New(lexer, writer)
+
 			err = parser.Parse()
+
+			writer.Flush()
+			output.Close()
 		case RunModeCompile:
+			outputPath := strings.TrimSuffix(file, path.Ext(file)) + ".vm"
+			output, fileerr := os.Create(outputPath)
+			if fileerr != nil {
+				log.Fatal(fileerr)
+			}
+			outputName = path.Base(outputPath)
+
+			writer := bufio.NewWriter(output)
 			compiler := compiler.New(lexer, writer)
+
 			err = compiler.Compile()
+
+			writer.Flush()
+			output.Close()
 		}
 
-		inputName := path.Base(file)
-		outputName := path.Base(outputPath)
-
-		writer.Flush()
-		output.Close()
 		if err != nil {
 			log.Printf("✖ | %v → %v\n\t%v", inputName, outputName, err)
+		} else {
+			log.Printf("✔ | %v → %v", inputName, outputName)
 		}
-
-		log.Printf("✔ | %v → %v", inputName, outputName)
 	}
 }

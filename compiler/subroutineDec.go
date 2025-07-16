@@ -2,60 +2,57 @@ package compiler
 
 import "github.com/ryandavidmercado/jack-compiler/common"
 
-func (c *Compiler) compileSubroutineDec(indent int) (bool, error) {
-	nextIndent := indent + common.BaseIndent
-
+func (c *Compiler) compileSubroutineDec() error {
 	// constructor | function | method
-	token, err := c.lexer.Expect(func(t *common.Token) bool {
+	subroutineType, err := c.lexer.Expect(func(t *common.Token) bool {
 		return t.TokenType == common.TTKeyword && (t.Value == "constructor" || t.Value == "function" || t.Value == "method")
 	})
 	if err != nil {
-		c.lexer.TokenIsUnused = true
-		return true, nil
+		return err
 	}
 
-	c.writer.WriteOpeningTag("subroutineDec", indent)
-	c.writer.WriteToken(token, nextIndent)
+	// ------------- Initialize Subroutine Symbol Table --------------
+	symbolTable := NewSymbolTable([]string{"argument", "local"})
+	if subroutineType.Value == "method" {
+		symbolTable.Add("this", c.className, "argument")
+	}
+	// ---------------------------------------------------------------
 
 	// type || 'void'
-	err = c.compileType(true, nextIndent)
+	_, err = c.compileType(true)
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	// subroutineName
-	token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+	subroutineName, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 	if err != nil {
-		return true, err
+		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// '(';
-	token, err = c.lexer.ExpectSymbol("(")
+	_, err = c.lexer.ExpectSymbol("(")
 	if err != nil {
-		return true, err
+		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// parameterList
-	err = c.compileParameterList(nextIndent)
+	err = c.compileParameterList(symbolTable)
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	// ')';
-	token, err = c.lexer.ExpectSymbol(")")
+	_, err = c.lexer.ExpectSymbol(")")
 	if err != nil {
-		return true, err
+		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// subroutineBody
-	err = c.compileSubroutineBody(nextIndent)
+	err = c.compileSubroutineBody(symbolTable, subroutineName.Value, subroutineType.Value)
 	if err != nil {
-		return true, err
+		return err
 	}
 
-	c.writer.WriteClosingTag("subroutineDec", indent)
-	return false, nil
+	return nil
 }

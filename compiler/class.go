@@ -2,52 +2,59 @@ package compiler
 
 import "github.com/ryandavidmercado/jack-compiler/common"
 
-func (c *Compiler) compileClass(indent int) error {
-	c.writer.WriteOpeningTag("class", indent)
-	nextIndent := indent + common.BaseIndent
-
+func (c *Compiler) compileClass() error {
 	// 'class'
-	token, err := c.lexer.ExpectKeyword("class")
+	_, err := c.lexer.ExpectKeyword("class")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// className
-	token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+	className, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
+	c.className = className.Value
 
 	// '{'
-	token, err = c.lexer.ExpectSymbol("{")
+	_, err = c.lexer.ExpectSymbol("{")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// classVarDec*
-	for done, err := c.compileClassVarDec(nextIndent); !done || err != nil; done, err = c.compileClassVarDec(nextIndent) {
+	for {
+		_, err = c.lexer.Expect(func(t *common.Token) bool {
+			return t.TokenType == common.TTKeyword && (t.Value == "static" || t.Value == "field")
+		})
+		c.lexer.TokenIsUnused = true
+
 		if err != nil {
-			return err
+			break
+		} else {
+			c.compileClassVarDec()
 		}
 	}
 
 	// classSubroutineDec*
-	for done, err := c.compileSubroutineDec(nextIndent); !done || err != nil; done, err = c.compileSubroutineDec(nextIndent) {
+	for {
+		_, err := c.lexer.Expect(func(t *common.Token) bool {
+			return t.TokenType == common.TTKeyword && (t.Value == "constructor" || t.Value == "function" || t.Value == "method")
+		})
+		c.lexer.TokenIsUnused = true
+
 		if err != nil {
-			return err
+			break
+		} else {
+			c.compileSubroutineDec()
 		}
 	}
 
 	// '}'
-	token, err = c.lexer.ExpectSymbol("}")
+	_, err = c.lexer.ExpectSymbol("}")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	c.writer.WriteClosingTag("class", indent)
 	return nil
 }

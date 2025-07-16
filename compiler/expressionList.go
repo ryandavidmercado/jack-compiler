@@ -1,37 +1,33 @@
 package compiler
 
-import "github.com/ryandavidmercado/jack-compiler/common"
-
-func (c *Compiler) compileExpressionList(indent int) error {
-	c.writer.WriteOpeningTag("expressionList", indent)
-	nextIndent := indent + common.BaseIndent
+func (c *Compiler) compileExpressionList(st *symbolTable) (uint8, error) {
+	var count uint8 = 0
 
 	// expression
-	err := c.compileExpression(nextIndent)
+	err := c.compileExpression(st)
 	if err != nil {
 		// expression is optional here; relinquish token and return
-		c.writer.WriteClosingTag("expressionList", indent)
 		c.lexer.TokenIsUnused = true
-		return nil
+		return 0, nil
 	}
+	count += 1
 
 	// (, expression)*
 	for {
-		token, err := c.lexer.ExpectSymbol(",")
+		_, err := c.lexer.ExpectSymbol(",")
 		if err != nil {
 			// no more expressions, break
 			c.lexer.TokenIsUnused = true
 			break
 		}
-		c.writer.WriteToken(token, nextIndent)
 
-		err = c.compileExpression(nextIndent)
+		err = c.compileExpression(st)
 		if err != nil {
 			// we should have gotten an expression here; fail
-			return err
+			return 0, err
 		}
+		count += 1
 	}
 
-	c.writer.WriteClosingTag("expressionList", indent)
-	return nil
+	return count, nil
 }

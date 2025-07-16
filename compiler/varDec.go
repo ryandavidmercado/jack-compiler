@@ -1,58 +1,52 @@
 package compiler
 
-import (
-	"fmt"
-	"github.com/ryandavidmercado/jack-compiler/common"
-)
+import "github.com/ryandavidmercado/jack-compiler/common"
 
-func (c *Compiler) compileVarDec(indent int) (bool, error) {
-	nextIndent := indent + common.BaseIndent
-
+func (c *Compiler) compileVarDec(st *symbolTable) error {
 	// var
-	token, err := c.lexer.ExpectKeyword("var")
+	_, err := c.lexer.ExpectKeyword("var")
 	if err != nil {
-		c.lexer.TokenIsUnused = true
-		return true, nil
+		return err
 	}
-	c.writer.WriteOpeningTag("varDec", indent)
-	c.writer.WriteToken(token, nextIndent)
 
 	// type
-	err = c.compileType(false, nextIndent)
+	varType, err := c.compileType(false)
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	// varName
-	token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+	varName, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 	if err != nil {
-		return true, err
+		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
+
+	st.Add(varName.Value, varType.Value, "local")
 
 	// (, varName)* OR ';'
 	for {
 		// , OR ;
-		token, err = c.lexer.ExpectTokenType(common.TTSymbol)
-		if err != nil {
-			return true, err
-		}
-		c.writer.WriteToken(token, nextIndent)
+		sep, err := c.lexer.Expect(func(t *common.Token) bool {
+			return t.TokenType == common.TTSymbol &&
+				(t.Value == ";" || t.Value == ",")
+		})
 
-		if token.Value == ";" {
+		if err != nil {
+			return err
+		}
+
+		if sep.Value == ";" {
 			break
-		} else if token.Value != "," {
-			return true, fmt.Errorf("Expected symbol ';' or ',', got %v", token)
 		}
 
 		// varName
-		token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+		varName, err = c.lexer.ExpectTokenType(common.TTIdentifier)
 		if err != nil {
-			return true, err
+			return err
 		}
-		c.writer.WriteToken(token, nextIndent)
+
+		st.Add(varName.Value, varType.Value, "local")
 	}
 
-	c.writer.WriteClosingTag("varDec", indent)
-	return false, nil
+	return nil
 }

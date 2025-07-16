@@ -1,88 +1,97 @@
 package compiler
 
-import "github.com/ryandavidmercado/jack-compiler/common"
-
-func (c *Compiler) compileIfStatement(indent int) error {
-	c.writer.WriteOpeningTag("ifStatement", indent)
-	nextIndent := indent + common.BaseIndent
+func (c *Compiler) compileIfStatement(st *symbolTable) error {
+	c.incLabel()
+	l1 := c.label()
 
 	// 'if'
-	token, err := c.lexer.ExpectKeyword("if")
+	_, err := c.lexer.ExpectKeyword("if")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// '('
-	token, err = c.lexer.ExpectSymbol("(")
+	_, err = c.lexer.ExpectSymbol("(")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// expression
-	err = c.compileExpression(nextIndent)
+	err = c.compileExpression(st)
+	if err != nil {
+		return err
+	}
+
+	err = c.writer.WriteBody("not")
+	if err != nil {
+		return err
+	}
+	err = c.writer.WriteBody("if-goto %v", l1)
 	if err != nil {
 		return err
 	}
 
 	// ')'
-	token, err = c.lexer.ExpectSymbol(")")
+	_, err = c.lexer.ExpectSymbol(")")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// '{'
-	token, err = c.lexer.ExpectSymbol("{")
+	_, err = c.lexer.ExpectSymbol("{")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// statements
-	err = c.compileStatements(nextIndent)
+	err = c.compileStatements(st)
 	if err != nil {
 		return err
 	}
 
 	// '}'
-	token, err = c.lexer.ExpectSymbol("}")
+	_, err = c.lexer.ExpectSymbol("}")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// else?
-	token, err = c.lexer.ExpectKeyword("else")
+	_, err = c.lexer.ExpectKeyword("else")
 	if err != nil {
 		// if we don't have else, relinquish token & return early
 		c.lexer.TokenIsUnused = true
-		c.writer.WriteClosingTag("ifStatement", indent)
-		return nil
+		return c.writer.WriteLabel(l1)
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	// '{'
-	token, err = c.lexer.ExpectSymbol("{")
+	c.incLabel()
+	l2 := c.label()
+
+	err = c.writer.WriteBody("goto %v", l2)
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
+	err = c.writer.WriteLabel(l1)
+	if err != nil {
+		return err
+	}
+
+	// '{'
+	_, err = c.lexer.ExpectSymbol("{")
+	if err != nil {
+		return err
+	}
 
 	// statements
-	err = c.compileStatements(nextIndent)
+	err = c.compileStatements(st)
 	if err != nil {
 		return err
 	}
 
 	// '}'
-	token, err = c.lexer.ExpectSymbol("}")
+	_, err = c.lexer.ExpectSymbol("}")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	c.writer.WriteClosingTag("ifStatement", indent)
-	return nil
+	return c.writer.WriteLabel(l2)
 }

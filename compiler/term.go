@@ -1,6 +1,11 @@
 package compiler
 
-import "github.com/ryandavidmercado/jack-compiler/common"
+import (
+	"fmt"
+	"strconv"
+
+	"github.com/ryandavidmercado/jack-compiler/common"
+)
 
 var keywordConstants = map[string]struct{}{
 	"true":  {},
@@ -14,92 +19,67 @@ var unaryOps = map[string]struct{}{
 	"~": {},
 }
 
-func (c *Compiler) compileTerm(indent int, toPrint string) error {
-	nextIndent := indent + common.BaseIndent
-
-	printToPrint := func() {
-		if len(toPrint) == 0 {
-			return
-		}
-
-		c.writer.WriteString(toPrint)
-	}
-
-	endcompile := func(token *common.Token) error {
-		if token != nil {
-			c.writer.WriteToken(token, nextIndent)
-		}
-		c.writer.WriteClosingTag("term", indent)
-		return nil
-	}
-
+func (c *Compiler) compileTerm(st *symbolTable) error {
 	// integerConstant
-	token, err := c.lexer.ExpectTokenType(common.TTIntegerConstant)
+	intToken, err := c.lexer.ExpectTokenType(common.TTIntegerConstant)
 	if err == nil {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		return endcompile(token)
+		asInt, err := strconv.Atoi(intToken.Value)
+		if err != nil {
+			return err
+		}
+		if asInt < -32_767 || asInt > 32_767 {
+			return fmt.Errorf("Invalid integer constant %d", asInt)
+		}
+
+		return c.writer.WritePushConstant(int16(asInt))
 	}
 	c.lexer.TokenIsUnused = true
 
 	// | stringConstant
-	token, err = c.lexer.ExpectTokenType(common.TTStringConstant)
+	strToken, err := c.lexer.ExpectTokenType(common.TTStringConstant)
 	if err == nil {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		return endcompile(token)
+		return c.writer.WriteStringConstant(strToken.Value)
 	}
 	c.lexer.TokenIsUnused = true
 
 	// | keywordConstant
-	token, err = c.lexer.Expect(func(t *common.Token) bool {
+	keywordToken, err := c.lexer.Expect(func(t *common.Token) bool {
 		_, valid := keywordConstants[t.Value]
 		return t.TokenType == common.TTKeyword && valid
 	})
 	if err == nil {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		return endcompile(token)
+		return c.writer.WriteKeywordConstant(keywordToken.Value)
 	}
 	c.lexer.TokenIsUnused = true
 
 	// | '(' expression ')'
-	token, err = c.lexer.ExpectSymbol("(")
+	_, err = c.lexer.ExpectSymbol("(")
 	if err == nil {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		c.writer.WriteToken(token, nextIndent)
-		err = c.compileExpression(nextIndent)
+		err = c.compileExpression(st)
 		if err != nil {
 			return err
 		}
-		token, err := c.lexer.ExpectSymbol(")")
-		if err != nil {
-			return err
-		}
-		return endcompile(token)
+		_, err = c.lexer.ExpectSymbol(")")
+		return err
 	}
 	c.lexer.TokenIsUnused = true
 
 	// | (unaryOp term)
-	token, err = c.lexer.Expect(func(t *common.Token) bool {
+	unaryOpToken, err := c.lexer.Expect(func(t *common.Token) bool {
 		_, valid := unaryOps[t.Value]
 		return t.TokenType == common.TTSymbol && valid
 	})
 	if err == nil {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		c.writer.WriteToken(token, nextIndent)
-		err := c.compileTerm(nextIndent, "")
+		err = c.compileTerm(st)
 		if err != nil {
 			return err
 		}
-		return endcompile(nil)
+		return c.writer.WriteUnaryOp(unaryOpToken.Value)
 	}
 	c.lexer.TokenIsUnused = true
 
 	// varName | varName '[' expression ']' | subroutineCall
-	token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+	varNameToken, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 	if err != nil {
 		return err
 	}
@@ -111,38 +91,47 @@ func (c *Compiler) compileTerm(indent int, toPrint string) error {
 
 	// varName '[' expression ']'
 	if lookAheadToken.Equals(&common.Token{TokenType: common.TTSymbol, Value: "["}) {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		c.writer.WriteToken(token, nextIndent)
-		c.writer.WriteToken(lookAheadToken, nextIndent)
-
-		err := c.compileExpression(nextIndent)
+		symbol, err := getSymbolFromTables(varNameToken.Value, st, c.symbolTable)
 		if err != nil {
 			return err
 		}
 
-		token, err = c.lexer.ExpectSymbol("]")
+		// ** push arr **
+		c.writer.WritePushSymbol(symbol)
+
+		// ** compute/push index **
+		err = c.compileExpression(st)
 		if err != nil {
 			return err
 		}
-		return endcompile(token)
+
+		// add base arr address to access index
+		c.writer.WriteBody("add")
+
+		// set THAT to the memory address of the element
+		c.writer.WritePop("pointer", 1)
+
+		// finally, push the value at that memory address to top of stack
+		c.writer.WritePush("that", 0)
+
+		_, err = c.lexer.ExpectSymbol("]")
+		return nil
 	}
 
 	// subRoutineCall
 	if lookAheadToken.Equals(&common.Token{TokenType: common.TTSymbol, Value: "("}) ||
 		lookAheadToken.Equals(&common.Token{TokenType: common.TTSymbol, Value: "."}) {
-		printToPrint()
-		c.writer.WriteOpeningTag("term", indent)
-		err = c.compileSubroutineCall(nextIndent, token, lookAheadToken)
-		if err != nil {
-			return err
-		}
-		return endcompile(nil)
+		return c.compileSubroutineCall(varNameToken.Value, lookAheadToken, st)
 	}
 
 	// varName
-	printToPrint()
-	c.writer.WriteOpeningTag("term", indent)
+	symbol, err := getSymbolFromTables(varNameToken.Value, st, c.symbolTable)
+	if err != nil {
+		return err
+	}
+
+	err = c.writer.WritePushSymbol(symbol)
 	c.lexer.TokenIsUnused = true // relinquish lookAheadToken
-	return endcompile(token)
+
+	return nil
 }

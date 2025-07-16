@@ -2,7 +2,7 @@ package compiler
 
 import "github.com/ryandavidmercado/jack-compiler/common"
 
-func (c *Compiler) compileType(includeVoid bool, indent int) error {
+func (c *Compiler) compileType(includeVoid bool) (*common.Token, error) {
 	validKeywords := map[string]struct{}{
 		"int":     {},
 		"char":    {},
@@ -25,10 +25,8 @@ func (c *Compiler) compileType(includeVoid bool, indent int) error {
 		}
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	c.writer.WriteToken(token, indent)
-
-	return nil
+	return token, nil
 }

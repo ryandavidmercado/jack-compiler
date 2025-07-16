@@ -1,56 +1,68 @@
 package compiler
 
-import "github.com/ryandavidmercado/jack-compiler/common"
+func (c *Compiler) compileWhileStatement(st *symbolTable) error {
+	c.incLabel()
+	l1 := c.label()
+	c.incLabel()
+	l2 := c.label()
 
-func (c *Compiler) compileWhileStatement(indent int) error {
-	c.writer.WriteOpeningTag("whileStatement", indent)
-	nextIndent := indent + common.BaseIndent
+	// ** label L1 **
+	err := c.writer.WriteLabel(l1)
+	if err != nil {
+		return err
+	}
 
 	// 'while'
-	token, err := c.lexer.ExpectKeyword("while")
+	_, err = c.lexer.ExpectKeyword("while")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// '('
-	token, err = c.lexer.ExpectSymbol("(")
+	_, err = c.lexer.ExpectSymbol("(")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	// expression
-	if err := c.compileExpression(nextIndent); err != nil {
+	// ** compiled (expression) **
+	err = c.compileExpression(st)
+	if err != nil {
 		return err
 	}
 
 	// ')'
-	token, err = c.lexer.ExpectSymbol(")")
+	_, err = c.lexer.ExpectSymbol(")")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
+
+	// ** not        **
+	// ** if-goto L2 **
+	c.writer.WriteBody("not")
+	c.writer.WriteBody("if-goto %v", l2)
 
 	// '{'
-	token, err = c.lexer.ExpectSymbol("{")
+	_, err = c.lexer.ExpectSymbol("{")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	// statements
-	if err := c.compileStatements(nextIndent); err != nil {
+	// ** compiled (statements) **
+	err = c.compileStatements(st)
+	if err != nil {
 		return err
 	}
 
 	// '}'
-	token, err = c.lexer.ExpectSymbol("}")
+	_, err = c.lexer.ExpectSymbol("}")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	c.writer.WriteClosingTag("whileStatement", indent)
+	// ** goto L1 **
+	// ** label L2 **
+	c.writer.WriteBody("goto %v", l1)
+	c.writer.WriteLabel(l2)
+
 	return nil
 }

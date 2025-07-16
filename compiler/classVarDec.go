@@ -1,60 +1,57 @@
 package compiler
 
 import (
-	"fmt"
 	"github.com/ryandavidmercado/jack-compiler/common"
 )
 
-func (c *Compiler) compileClassVarDec(indent int) (bool, error) {
-	nextIndent := indent + common.BaseIndent
-
+func (c *Compiler) compileClassVarDec() error {
 	// static | field
-	token, err := c.lexer.Expect(func(t *common.Token) bool {
+	kind, err := c.lexer.Expect(func(t *common.Token) bool {
 		return t.TokenType == common.TTKeyword && (t.Value == "static" || t.Value == "field")
 	})
 	if err != nil {
 		c.lexer.TokenIsUnused = true
-		return true, nil
+		return nil
 	}
-	c.writer.WriteOpeningTag("classVarDec", indent)
-	c.writer.WriteToken(token, nextIndent)
 
 	// type
-	err = c.compileType(false, nextIndent)
+	varType, err := c.compileType(false)
 	if err != nil {
-		return true, err
+		return err
 	}
 
 	// varName
-	token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+	varName, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 	if err != nil {
-		return true, err
+		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
+
+	c.symbolTable.Add(varName.Value, varType.Value, kind.Value)
 
 	// (, varName)* OR ';'
 	for {
 		// , OR ;
-		token, err = c.lexer.ExpectTokenType(common.TTSymbol)
-		if err != nil {
-			return true, err
-		}
-		c.writer.WriteToken(token, nextIndent)
+		sep, err := c.lexer.Expect(func(t *common.Token) bool {
+			return t.TokenType == common.TTSymbol &&
+				(t.Value == ";" || t.Value == ",")
+		})
 
-		if token.Value == ";" {
+		if err != nil {
+			return err
+		}
+
+		if sep.Value == ";" {
 			break
-		} else if token.Value != "," {
-			return true, fmt.Errorf("Expected symbol ';' or ',', got %v", token)
 		}
 
 		// varName
-		token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+		varName, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 		if err != nil {
-			return true, err
+			return err
 		}
-		c.writer.WriteToken(token, nextIndent)
+
+		c.symbolTable.Add(varName.Value, varType.Value, kind.Value)
 	}
 
-	c.writer.WriteClosingTag("classVarDec", indent)
-	return false, nil
+	return nil
 }

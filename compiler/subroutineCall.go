@@ -1,66 +1,63 @@
 package compiler
 
 import (
-	"fmt"
 	"github.com/ryandavidmercado/jack-compiler/common"
 )
 
-func (c *Compiler) compileSubroutineCall(indent int, token1 *common.Token, token2 *common.Token) error {
-	if token1 == nil {
-		res, err := c.lexer.Advance()
+func (c *Compiler) compileSubroutineCall(firstValue string, lookAheadToken *common.Token, st *symbolTable) error {
+	var className string
+	var funcName string
+	argCount := 0
+
+	if lookAheadToken.Value == "." {
+		// firstValue is either an object or a class
+		next, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 		if err != nil {
 			return err
 		}
-		token1 = res
-	}
 
-	if token2 == nil {
-		res, err := c.lexer.Advance()
-		if err != nil {
-			return err
+		objSymbol, err := getSymbolFromTables(firstValue, st, c.symbolTable)
+
+		if err == nil {
+			// we are calling a method
+			className = objSymbol.symbolType
+			funcName = next.Value
+			c.writer.WritePushSymbol(objSymbol) // push the receiver onto the stack as the callee's first argument
+			argCount += 1
+		} else {
+			// we are calling a static function
+			className = firstValue
+			funcName = next.Value
 		}
-		token2 = res
+
+	} else {
+		// we are calling a method on the current object
+		// firstValue is the funcName; we should use this class as the className
+		className = c.className
+		funcName = firstValue
+		c.writer.WritePush("pointer", 0)
+		argCount += 1
+
+		c.lexer.TokenIsUnused = true
 	}
 
-	// subroutineName | className | varName
-	if token1.TokenType != common.TTIdentifier {
-		return fmt.Errorf("Expected identifier token, got %v", token1)
-	}
-	c.writer.WriteToken(token1, indent)
-
-	// '.' | '('
-	valid := token2.Value == "." || token2.Value == "("
-	if token2.TokenType != common.TTSymbol || !valid {
-		return fmt.Errorf("Expected symbol token '.' or '(', got %v", token2)
-	}
-	c.writer.WriteToken(token2, indent)
-
-	if token2.Value == "." {
-		// subroutineName
-		token, err := c.lexer.ExpectTokenType(common.TTIdentifier)
-		if err != nil {
-			return err
-		}
-		c.writer.WriteToken(token, indent)
-
-		// (
-		token, err = c.lexer.ExpectSymbol("(")
-		if err != nil {
-			return err
-		}
-		c.writer.WriteToken(token, indent)
-	}
-
-	err := c.compileExpressionList(indent)
+	_, err := c.lexer.ExpectSymbol("(")
 	if err != nil {
 		return err
 	}
 
-	token, err := c.lexer.ExpectSymbol(")")
+	expressionCount, err := c.compileExpressionList(st)
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, indent)
 
-	return nil
+	argCount += int(expressionCount)
+
+	_, err = c.lexer.ExpectSymbol(")")
+	if err != nil {
+		return err
+	}
+
+	fullFunctionName := className + "." + funcName
+	return c.writer.WriteFunctionCall(fullFunctionName, uint8(argCount))
 }

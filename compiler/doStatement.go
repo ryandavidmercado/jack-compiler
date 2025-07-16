@@ -1,31 +1,23 @@
 package compiler
 
-import "github.com/ryandavidmercado/jack-compiler/common"
-
-func (c *Compiler) compileDoStatement(indent int) error {
-	c.writer.WriteOpeningTag("doStatement", indent)
-	nextIndent := indent + common.BaseIndent
-
+func (c *Compiler) compileDoStatement(st *symbolTable) error {
 	// 'do'
-	token, err := c.lexer.ExpectKeyword("do")
+	_, err := c.lexer.ExpectKeyword("do")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	// subroutineCall
-	err = c.compileSubroutineCall(nextIndent, nil, nil)
+	// subroutineCall (handle as expression)
+	err = c.compileExpression(st)
 	if err != nil {
 		return err
 	}
 
 	// ';'
-	token, err = c.lexer.ExpectSymbol(";")
+	_, err = c.lexer.ExpectSymbol(";")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	c.writer.WriteClosingTag("doStatement", indent)
-	return nil
+	return c.writer.WritePop("temp", 0)
 }

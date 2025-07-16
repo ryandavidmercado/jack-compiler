@@ -2,66 +2,96 @@ package compiler
 
 import "github.com/ryandavidmercado/jack-compiler/common"
 
-func (c *Compiler) compileLetStatement(indent int) error {
-	c.writer.WriteOpeningTag("letStatement", indent)
-	nextIndent := indent + common.BaseIndent
-
+func (c *Compiler) compileLetStatement(st *symbolTable) error {
 	// 'let'
-	token, err := c.lexer.ExpectKeyword("let")
+	_, err := c.lexer.ExpectKeyword("let")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// varName
-	token, err = c.lexer.ExpectTokenType(common.TTIdentifier)
+	varName, err := c.lexer.ExpectTokenType(common.TTIdentifier)
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
+
+	symbol, err := getSymbolFromTables(varName.Value, st, c.symbolTable)
+	if err != nil {
+		return err
+	}
 
 	// ('[' expression ']')?
-	token, err = c.lexer.ExpectSymbol("[")
+	_, err = c.lexer.ExpectSymbol("[")
 	if err == nil {
-		c.writer.WriteToken(token, nextIndent)
+		// ** push arr **
+		c.writer.WritePushSymbol(symbol)
 
-		// expression
-		err = c.compileExpression(nextIndent)
+		// ** push access value **
+		err = c.compileExpression(st)
 		if err != nil {
 			return err
 		}
+
+		// ** add **
+		// now the relevant addr is top of stack
+		c.writer.WriteBody("add")
 
 		// ']'
-		token, err := c.lexer.ExpectSymbol("]")
+		_, err := c.lexer.ExpectSymbol("]")
 		if err != nil {
 			return err
 		}
-		c.writer.WriteToken(token, nextIndent)
-	} else {
-		// this is optional; relinquish token & skip
-		c.lexer.TokenIsUnused = true
+
+		// '='
+		_, err = c.lexer.ExpectSymbol("=")
+		if err != nil {
+			return err
+		}
+
+		// ** push the value to assign to arr[x] **
+		err = c.compileExpression(st)
+		if err != nil {
+			return err
+		}
+
+		// put value in temp[0]
+		// save addr goes back to top of stack
+		c.writer.WritePop("temp", 0)
+
+		// point THAT to save addr
+		c.writer.WritePop("pointer", 1)
+		// get the value to save
+		c.writer.WritePush("temp", 0)
+		// save the value to THAT
+		c.writer.WritePop("that", 0)
+
+		// ';'
+		_, err = c.lexer.ExpectSymbol(";")
+		if err != nil {
+			return err
+		}
+
+		return nil
 	}
+	c.lexer.TokenIsUnused = true
 
 	// '='
-	token, err = c.lexer.ExpectSymbol("=")
+	_, err = c.lexer.ExpectSymbol("=")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
 	// expression
-	err = c.compileExpression(nextIndent)
+	err = c.compileExpression(st)
 	if err != nil {
 		return err
 	}
 
 	// ';'
-	token, err = c.lexer.ExpectSymbol(";")
+	_, err = c.lexer.ExpectSymbol(";")
 	if err != nil {
 		return err
 	}
-	c.writer.WriteToken(token, nextIndent)
 
-	c.writer.WriteClosingTag("letStatement", indent)
-	return nil
+	return c.writer.WritePopSymbol(symbol)
 }
