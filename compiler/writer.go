@@ -77,12 +77,17 @@ func (cw *compilerWriter) WritePushConstant(num int16) error {
 }
 
 func (cw *compilerWriter) WriteStringConstant(str string) error {
-	err := cw.WriteBody("call String.new 0")
+	cw.WritePushConstant(int16(len(str)))
+	err := cw.WriteFunctionCall("String.new", 1)
+
 	if err != nil {
 		return err
 	}
 
-	// do the rest
+	for _, char := range str {
+		cw.WritePushConstant(int16(char))
+		cw.WriteFunctionCall("String.appendChar", 2)
+	}
 
 	return nil
 }
