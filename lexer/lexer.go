@@ -9,14 +9,50 @@ import (
 )
 
 type Lexer struct {
-	reader        *bufio.Reader
+	reader        *lexerReader
 	next          *lexerAdvance
 	Token         *common.Token
 	TokenIsUnused bool
 }
 
+type lexerReader struct {
+	line     uint
+	char     uint
+	prevLine uint
+	prevChar uint
+	reader   *bufio.Reader
+}
+
+func (lr *lexerReader) ReadRune() (rune, int, error) {
+	rune, size, err := lr.reader.ReadRune()
+
+	lr.prevLine = lr.line
+	lr.prevChar = lr.char
+
+	if rune == '\n' {
+		lr.line += 1
+		lr.char = 1
+	} else {
+		lr.char += 1
+	}
+
+	return rune, size, err
+}
+
+func (lr *lexerReader) UnreadRune() error {
+	err := lr.reader.UnreadRune()
+	if err != nil {
+		return err
+	}
+
+	lr.line = lr.prevLine
+	lr.char = lr.prevChar
+
+	return nil
+}
+
 func New(reader *bufio.Reader) *Lexer {
-	return &Lexer{reader: reader, next: nil, Token: nil}
+	return &Lexer{reader: &lexerReader{reader: reader, line: 1, char: 1}, next: nil, Token: nil}
 }
 
 func (l *Lexer) Advance() (*common.Token, error) {
@@ -259,4 +295,20 @@ func (l *Lexer) advanceMultilineComment(_ string) (*common.Token, error) {
 	}
 
 	return l.advanceMultilineComment("")
+}
+
+type lineChar struct {
+	Line uint
+	Char uint
+}
+
+func (l *Lexer) CurrentLineChar() lineChar {
+	return lineChar{
+		Line: l.reader.line,
+		Char: l.reader.char,
+	}
+}
+
+func (lc lineChar) String() string {
+	return fmt.Sprintf("Line: %v - Char: %v", lc.Line, lc.Char)
 }

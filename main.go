@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"fmt"
 	"log"
 	"os"
 	"path"
@@ -91,7 +92,10 @@ func main() {
 		}
 
 		if err != nil {
-			log.Printf("✖ | %v → %v\n\t%v", inputName, outputName, err)
+			lineChar := lexer.CurrentLineChar()
+			errWithLineChar := fmt.Errorf("%v -- %v", lineChar, err)
+
+			log.Printf("✖ | %v → %v\n\t%v", inputName, outputName, errWithLineChar)
 		} else {
 			log.Printf("✔ | %v → %v", inputName, outputName)
 		}
