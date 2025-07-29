@@ -58,10 +58,10 @@ func main() {
 
 		lexer := lexer.New(bufio.NewReader(input))
 
-		outputDir := path.Join(
-			path.Dir(file),
-			"dist",
-		)
+		outputDir := path.Dir(file)
+		if !flags.inline {
+			outputDir = path.Join(outputDir, "dist")
+		}
 
 		err = os.MkdirAll(outputDir, os.ModePerm)
 		if err != nil {

@@ -23,6 +23,7 @@ type CliFlags struct {
 	filename string
 	dirname  string
 	mode     RunMode
+	inline   bool
 }
 
 func parseCliFlags() (*CliFlags, error) {
@@ -31,6 +32,7 @@ func parseCliFlags() (*CliFlags, error) {
 	filePtr := flag.String("file", "", "input file for single-file translation (optional; takes priority over dir)")
 	dirPtr := flag.String("dir", cwd, "input directory for multi-file translation (default cwd)")
 	modePtr := flag.String("mode", "compile", "action to perform (\"analyze\" or \"compile\"). Defaults to \"compile\".")
+	inlinePtr := flag.Bool("inline", false, "set to true to target output directory directly instead of /dist.")
 
 	flag.Parse()
 
@@ -44,5 +46,5 @@ func parseCliFlags() (*CliFlags, error) {
 		return nil, fmt.Errorf("Expected run mode \"analyze\" or \"compile\"; got \"%v\"", *modePtr)
 	}
 
-	return &CliFlags{filename: *filePtr, dirname: *dirPtr, mode: runMode}, nil
+	return &CliFlags{filename: *filePtr, dirname: *dirPtr, mode: runMode, inline: *inlinePtr}, nil
 }
