@@ -58,9 +58,25 @@ func main() {
 
 		lexer := lexer.New(bufio.NewReader(input))
 
+		outputDir := path.Join(
+			path.Dir(file),
+			"dist",
+		)
+
+		err = os.MkdirAll(outputDir, os.ModePerm)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		getOutputPath := func(extension string) string {
+			inputNameNoExt := strings.TrimSuffix(inputName, path.Ext(inputName))
+			outputName := inputNameNoExt + extension
+			return path.Join(outputDir, outputName)
+		}
+
 		switch flags.mode {
 		case RunModeAnalyze:
-			outputPath := strings.TrimSuffix(file, path.Ext(file)) + ".xml"
+			outputPath := getOutputPath(".xml")
 			output, fileerr := os.Create(outputPath)
 			if fileerr != nil {
 				log.Fatal(fileerr)
@@ -75,7 +91,7 @@ func main() {
 			writer.Flush()
 			output.Close()
 		case RunModeCompile:
-			outputPath := strings.TrimSuffix(file, path.Ext(file)) + ".vm"
+			outputPath := getOutputPath(".vm")
 			output, fileerr := os.Create(outputPath)
 			if fileerr != nil {
 				log.Fatal(fileerr)

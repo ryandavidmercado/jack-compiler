@@ -166,6 +166,7 @@ func (l *Lexer) getNext() (lexerAdvance, error) {
 
 	if char == '/' {
 		// check next char; if it's another /, we're in a comment
+		// if it's a *, we're in a multi-line comment
 		nextChar, _, _ := l.reader.ReadRune()
 		switch nextChar {
 		case '/':
@@ -280,12 +281,16 @@ func (l *Lexer) advanceMultilineComment(_ string) (*common.Token, error) {
 
 	if char == '*' {
 		nextChar, _, err := l.reader.ReadRune()
+		l.reader.UnreadRune()
+
 		if err != nil {
 			return nil, err
 		}
 
 		if nextChar == '/' {
+			l.reader.ReadRune() // we're at the end; re-consume and move forward
 			next, err := l.getNext()
+
 			if err != nil {
 				return nil, err
 			}

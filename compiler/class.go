@@ -1,6 +1,8 @@
 package compiler
 
-import "github.com/ryandavidmercado/jack-compiler/common"
+import (
+	"github.com/ryandavidmercado/jack-compiler/common"
+)
 
 func (c *Compiler) compileClass() error {
 	// 'class'
